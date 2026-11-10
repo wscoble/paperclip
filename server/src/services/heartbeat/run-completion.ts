@@ -63,6 +63,7 @@ import type { BudgetServiceHooks } from "../budgets.js";
 import type { providerTraceStore } from "../provider-trace-store.js";
 import type { createAgentIdentityRedactor } from "../agent-identity-redaction.js";
 import type { CurrentUserRedactionOptions } from "../../log-redaction.js";
+import { boundedDatabaseFailure } from "../database-failure-text.js";
 import type { AdapterExecutionResult } from "@paperclipai/adapter-utils";
 import type { getRunLogStore, RunLogHandle } from "../run-log-store.js";
 import type { createHeartbeatRunState, getAdapterSessionCodec } from "./run-state.js";
@@ -1097,7 +1098,10 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
     const currentUserRedactionOptions = await getCurrentUserRedactionOptions();
     const redactFailureText = (text: string) =>
       redactCurrentUserText(identityRedactor.redact(text), currentUserRedactionOptions);
-    const thrownMessage = redactFailureText(err instanceof Error ? err.message : "Unknown adapter failure");
+    // A database error's text is its statement and parameters, never a cause
+    // the board can act on. Keep a bounded cause; the log keeps the SQLSTATE.
+    const databaseFailure = boundedDatabaseFailure(err);
+    const thrownMessage = redactFailureText(databaseFailure?.message ?? (err instanceof Error ? err.message : "Unknown adapter failure"));
     const workspaceValidationFailure = isWorkspaceValidationFailure(err)
       ? err
       : null;
@@ -1154,8 +1158,11 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
       recordedResponsibleUserDenialCode ??
       nativeTerminalFailureCode ??
       (isStorageUnavailableError(err) ? STORAGE_UNAVAILABLE_CODE : null) ??
+      databaseFailure?.errorCode ??
       "adapter_failed";
-    logger.error({ err: identityRedactor.redact({ message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined }), runId }, "heartbeat execution failed");
+    logger.error({ err: identityRedactor.redact({ message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined }),
+      ...(databaseFailure ? { sqlState: databaseFailure.sqlState, databaseMessage: databaseFailure.databaseMessage,
+        errorCode: failureErrorCode } : {}), runId }, "heartbeat execution failed");
 
     let logSummary: {
       bytes: number | null;
