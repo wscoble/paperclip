@@ -67,13 +67,17 @@ export function RoutineSubSidebar({
   isSectionDirty,
   hasLiveRun,
   onNavigate,
+  hiddenSections,
 }: {
   activeSection: RoutineSectionKey;
   hrefFor: (section: RoutineSectionKey) => string;
   isSectionDirty: (section: RoutineSectionKey) => boolean;
   hasLiveRun: boolean;
   onNavigate: (section: RoutineSectionKey) => void;
+  /** Sections that do not exist for this routine (e.g. external routines have no Paperclip triggers). */
+  hiddenSections?: readonly RoutineSectionKey[];
 }) {
+  const hidden = new Set(hiddenSections ?? []);
   const itemRefs = useRef<Array<HTMLAnchorElement | null>>([]);
 
   const focusItem = (index: number) => {
@@ -117,7 +121,7 @@ export function RoutineSubSidebar({
           <p className="mx-2 px-2 pb-1 text-(length:--text-nano) font-medium uppercase tracking-widest font-mono text-muted-foreground/60">
             {group.label}
           </p>
-          {group.items.map((item) => {
+          {group.items.filter((item) => !hidden.has(item.key)).map((item) => {
             flatIndex += 1;
             const index = flatIndex;
             const isActive = item.key === activeSection;
@@ -165,16 +169,19 @@ export function RoutineSubSidebar({
   );
 }
 
-/** Mobile section picker — collapses the sub-sidebar into a grouped `<Select>`. */
+/** Mobile section picker - collapses the sub-sidebar into a grouped `<Select>`. */
 export function RoutineSectionPicker({
   activeSection,
   onNavigate,
   isSectionDirty,
+  hiddenSections,
 }: {
   activeSection: RoutineSectionKey;
   onNavigate: (section: RoutineSectionKey) => void;
   isSectionDirty: (section: RoutineSectionKey) => boolean;
+  hiddenSections?: readonly RoutineSectionKey[];
 }) {
+  const hidden = new Set(hiddenSections ?? []);
   return (
     <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-2 md:hidden">
       <Select
@@ -194,7 +201,7 @@ export function RoutineSectionPicker({
               <SelectLabel className="uppercase tracking-(--tracking-eyebrow) text-(length:--text-micro)">
                 {group.label}
               </SelectLabel>
-              {group.items.map((item) => (
+              {group.items.filter((item) => !hidden.has(item.key)).map((item) => (
                 <SelectItem key={item.key} value={item.key} className="h-11">
                   <span className="flex items-center gap-2">
                     <item.icon className="h-3.5 w-3.5" />

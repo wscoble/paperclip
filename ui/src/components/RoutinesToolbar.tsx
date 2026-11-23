@@ -3,12 +3,13 @@ import { Link } from "@/lib/router";
 import { ToolbarSearch } from "./ToolbarSearch";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { ROUTINE_SOURCE_FILTERS, ROUTINE_SOURCE_LABELS, type RoutineSource } from "../lib/routineSource";
 
 export type RoutineGroupBy = "folder" | "none" | "project" | "assignee";
 export type RoutineSortField = "updated" | "created" | "title" | "lastRun";
 export type RoutineSortDir = "asc" | "desc";
 
-export function RoutinesToolbar({ query, onQueryChange, sortField, sortDir, groupBy, onSortChange, onGroupChange, onNewFolder, onCreateRoutine, tasksHref, selectMode, onToggleSelect }: {
+export function RoutinesToolbar({ query, onQueryChange, sortField, sortDir, groupBy, onSortChange, onGroupChange, onNewFolder, onCreateRoutine, tasksHref, selectMode, onToggleSelect, sourceFilter, onSourceFilterChange }: {
   query: string;
   onQueryChange: (value: string) => void;
   sortField: RoutineSortField;
@@ -21,6 +22,8 @@ export function RoutinesToolbar({ query, onQueryChange, sortField, sortDir, grou
   tasksHref?: string;
   selectMode?: boolean;
   onToggleSelect?: () => void;
+  sourceFilter?: RoutineSource | "all";
+  onSourceFilterChange?: (value: RoutineSource | "all") => void;
 }) {
   return <div data-canonical-toolbar="routines" role="toolbar" aria-label="Routines controls" className="flex flex-wrap items-center gap-4">
     <ToolbarSearch query={query} onQueryChange={onQueryChange} label="Search routines" placeholder="Search routines…" />
@@ -96,6 +99,46 @@ export function RoutinesToolbar({ query, onQueryChange, sortField, sortDir, grou
         </div>
       </PopoverContent>
     </Popover>
+    {onSourceFilterChange ? (
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" title="Source">
+            Source{sourceFilter && sourceFilter !== "all" ? `: ${ROUTINE_SOURCE_LABELS[sourceFilter]}` : ""}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-44 p-0">
+          <div className="p-2 space-y-0.5">
+            <button
+              type="button"
+              className={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm ${
+                !sourceFilter || sourceFilter === "all"
+                  ? "bg-accent/50 text-foreground"
+                  : "text-muted-foreground hover:bg-accent/50"
+              }`}
+              onClick={() => onSourceFilterChange("all")}
+            >
+              <span>All sources</span>
+              {!sourceFilter || sourceFilter === "all" ? <Check className="h-3.5 w-3.5" /> : null}
+            </button>
+            {ROUTINE_SOURCE_FILTERS.map((source) => (
+              <button
+                type="button"
+                key={source}
+                className={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm ${
+                  sourceFilter === source
+                    ? "bg-accent/50 text-foreground"
+                    : "text-muted-foreground hover:bg-accent/50"
+                }`}
+                onClick={() => onSourceFilterChange(source)}
+              >
+                <span>{ROUTINE_SOURCE_LABELS[source]}</span>
+                {sourceFilter === source ? <Check className="h-3.5 w-3.5" /> : null}
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+    ) : null}
     <div className="design-toolbar-actions">
       {onToggleSelect && <Button variant="outline" size="sm" onClick={onToggleSelect}>{selectMode ? "Done" : "Select"}</Button>}
       {tasksHref && <Button variant="outline" size="sm" asChild><Link data-toolbar-control to={tasksHref}>View all tasks</Link></Button>}

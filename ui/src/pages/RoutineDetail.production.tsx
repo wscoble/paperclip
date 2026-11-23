@@ -37,6 +37,7 @@ import { RunButton } from "../components/AgentActionButtons";
 import { getRecentAssigneeIds, sortAgentsByRecency, trackRecentAssignee } from "../lib/recent-assignees";
 import { getRecentProjectIds, trackRecentProject } from "../lib/recent-projects";
 import { Badge } from "@/components/ui/badge";
+import { isExternalRoutineItem, routineSourceLabel } from "../lib/routineSource";
 import {
   RoutineSubSidebar,
   RoutineSectionPicker,
@@ -727,6 +728,16 @@ export function RoutineDetail() {
     );
   }
 
+  // External (observed) routines have no Paperclip triggers, variables,
+  // secrets or delivery configuration, and are never dispatched here.
+  const externalRoutine = isExternalRoutineItem(routine);
+  const externalHiddenSections: RoutineSectionKey[] = externalRoutine
+    ? ["triggers", "variables", "secrets", "delivery"]
+    : [];
+  if (externalRoutine && externalHiddenSections.includes(section)) {
+    return <Navigate to={`/routines/${routine.id}/overview`} replace />;
+  }
+
   const automationEnabled = routine.status === "active";
   const automationToggleDisabled = updateRoutineStatus.isPending || routine.status === "archived";
   const automationLabel =
@@ -858,9 +869,24 @@ export function RoutineDetail() {
                 <span className="font-mono text-(length:--text-nano)">{routine.managedByPlugin.resourceKey}</span>
               </Badge>
             ) : null}
+            {externalRoutine ? (
+              <Badge
+                variant="outline"
+                className="shrink-0 gap-1.5 text-xs text-muted-foreground"
+                title="Observed from an external scheduler; Paperclip does not dispatch it."
+              >
+                {routineSourceLabel(routine)}
+              </Badge>
+            ) : null}
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-3">
-            <RunButton onClick={() => setRunVariablesOpen(true)} disabled={runRoutine.isPending} />
+            {externalRoutine ? (
+              <span className="text-sm font-medium text-muted-foreground" title="Scheduled outside Paperclip; observations are recorded per run.">
+                Observed
+              </span>
+            ) : (
+              <>
+                <RunButton onClick={() => setRunVariablesOpen(true)} disabled={runRoutine.isPending} />
             <div className="flex items-center gap-2">
               <ToggleSwitch
                 size="default"
@@ -871,6 +897,8 @@ export function RoutineDetail() {
               />
               <span className={`text-sm font-medium ${automationLabelClassName}`}>{automationLabel}</span>
             </div>
+              </>
+            )}
           </div>
         </header>
 
@@ -879,6 +907,7 @@ export function RoutineDetail() {
           activeSection={section}
           onNavigate={navigateToSection}
           isSectionDirty={isSectionDirty}
+          hiddenSections={externalHiddenSections}
         />
 
         <div className="flex min-h-0 flex-1">
@@ -888,6 +917,7 @@ export function RoutineDetail() {
             isSectionDirty={isSectionDirty}
             hasLiveRun={hasLiveRun}
             onNavigate={(target) => writeLastSection(routineId!, target)}
+            hiddenSections={externalHiddenSections}
           />
 
           <main

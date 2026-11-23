@@ -21,6 +21,7 @@ import { createIssueDetailLocationState } from "../lib/issueDetailBreadcrumb";
 import { collectLiveIssueIds } from "../lib/liveIssueIds";
 import { getRecentAssigneeIds, sortAgentsByRecency, trackRecentAssignee } from "../lib/recent-assignees";
 import { getRecentProjectIds, trackRecentProject } from "../lib/recent-projects";
+import { routineSourceOf, type RoutineSource } from "../lib/routineSource";
 import { EmptyState } from "../components/EmptyState";
 import { IssuesList } from "../components/IssuesList";
 import { PageSkeleton } from "../components/PageSkeleton";
@@ -96,6 +97,7 @@ type RoutineViewState = {
   sortDir: RoutineSortDir;
   groupBy: RoutineGroupBy;
   collapsedGroups: string[];
+  sourceFilter?: RoutineSource | "all";
 };
 
 type RoutineGroup = {
@@ -111,6 +113,7 @@ const defaultRoutineViewState: RoutineViewState = {
   sortDir: "asc",
   groupBy: "folder",
   collapsedGroups: [],
+  sourceFilter: "all",
 };
 
 function getRoutineViewState(key: string): RoutineViewState {
@@ -696,16 +699,21 @@ export function Routines() {
       })),
     };
   }, [routineFolders, visibleRoutines]);
+  const sourceFilteredRoutines = useMemo(() => {
+    const source = routineViewState.sourceFilter;
+    if (!source || source === "all") return folderFilteredRoutines;
+    return folderFilteredRoutines.filter((routine) => routineSourceOf(routine) === source);
+  }, [folderFilteredRoutines, routineViewState.sourceFilter]);
   const sortedRoutines = useMemo(
     () => {
       const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-      const matches = folderFilteredRoutines.filter(routine => {
+      const matches = sourceFilteredRoutines.filter(routine => {
         const text = `${routine.title} ${routine.description ?? ""}`.toLowerCase();
         return terms.every(term => text.includes(term));
       });
       return sortRoutines(matches, routineViewState.sortField, routineViewState.sortDir);
     },
-    [folderFilteredRoutines, query, routineViewState.sortDir, routineViewState.sortField],
+    [query, routineViewState.sortDir, routineViewState.sortField, sourceFilteredRoutines],
   );
   const routineSections = useMemo(
     () => buildRoutineSections(sortedRoutines, routineViewState.groupBy, projectById, agentById, folderById),
@@ -860,6 +868,8 @@ export function Routines() {
         sortField={routineViewState.sortField} sortDir={routineViewState.sortDir} groupBy={routineViewState.groupBy}
         onSortChange={(sortField, sortDir) => updateRoutineView({ sortField, sortDir })}
         onGroupChange={groupBy => updateRoutineView({ groupBy, collapsedGroups: [] })}
+        sourceFilter={routineViewState.sourceFilter ?? "all"}
+        onSourceFilterChange={sourceFilter => updateRoutineView({ sourceFilter })}
         onNewFolder={routineViewState.groupBy === "folder" && !hasRoutineFolders ? () => openCreateFolder() : undefined}
         onCreateRoutine={openCreateRoutine}
         tasksHref="/issues?view=all&originKind=routine_execution&sortField=created&sortDir=desc"

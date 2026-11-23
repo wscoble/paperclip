@@ -12,6 +12,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import {
+  isExternalRoutineItem,
+  routineHealth,
+  routineHealthClasses,
+  routineHealthLabel,
+  routineSourceLabel,
+} from "../lib/routineSource";
 
 export type RoutineListProjectSummary = {
   name: string;
@@ -31,9 +38,11 @@ export type RoutineListRowItem = {
   status: string;
   projectId: string | null;
   assigneeAgentId: string | null;
+  originKind?: string | null;
   lastRun?: {
     triggeredAt?: Date | string | null;
     status?: string | null;
+    triggerPayload?: Record<string, unknown> | null;
   } | null;
 };
 
@@ -105,6 +114,8 @@ export function RoutineListRow<TRoutine extends RoutineListRowItem>({
   const agent = routine.assigneeAgentId ? agentById.get(routine.assigneeAgentId) ?? null : null;
   const isDraft = !isArchived && !routine.assigneeAgentId;
   const runDisabled = runningRoutineId === routine.id || isArchived || disableRunNow;
+  const external = isExternalRoutineItem(routine);
+  const health = routineHealth(routine);
 
   return (
     <Link
@@ -133,6 +144,14 @@ export function RoutineListRow<TRoutine extends RoutineListRowItem>({
       <div className="min-w-0 flex-1 space-y-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">{routine.title}</span>
+          {external ? (
+            <span
+              className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[11px] font-medium leading-none text-muted-foreground"
+              title="Observed from an external scheduler; Paperclip does not dispatch it."
+            >
+              {routineSourceLabel(routine)}
+            </span>
+          ) : null}
           {(isArchived || routine.status === "paused" || isDraft) ? (
             <span className="text-xs text-muted-foreground">
               {isArchived ? "archived" : isDraft ? "draft" : "paused"}
@@ -158,6 +177,9 @@ export function RoutineListRow<TRoutine extends RoutineListRowItem>({
             {formatLastRunTimestamp(routine.lastRun?.triggeredAt)}
             {routine.lastRun ? ` · ${formatRoutineRunStatus(routine.lastRun.status)}` : ""}
           </span>
+          <span className={routineHealthClasses(health)} title="Health from the latest run and expected cadence">
+            {routineHealthLabel(health)}
+          </span>
         </div>
         {secondaryDetails ? (
           <div className="text-xs text-muted-foreground">{secondaryDetails}</div>
@@ -165,6 +187,12 @@ export function RoutineListRow<TRoutine extends RoutineListRowItem>({
       </div>
 
       <div className="flex items-center gap-3" onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+        {external ? (
+          <span className="text-xs text-muted-foreground" title="Scheduled outside Paperclip; observations are recorded per run.">
+            Observed
+          </span>
+        ) : (
+          <>
         {runNowButton ? (
           <Button
             variant="outline"
@@ -189,6 +217,8 @@ export function RoutineListRow<TRoutine extends RoutineListRowItem>({
             {isArchived ? "Archived" : isDraft ? "Draft" : enabled ? "On" : "Off"}
           </span>
         </div>
+          </>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -201,7 +231,7 @@ export function RoutineListRow<TRoutine extends RoutineListRowItem>({
               <Link to={href}>{configureLabel}</Link>
             </DropdownMenuItem>
             <DropdownMenuItem
-              disabled={runDisabled}
+              disabled={runDisabled || external}
               onClick={() => onRunNow(routine)}
             >
               {runningRoutineId === routine.id ? "Running..." : "Run now"}
@@ -215,7 +245,7 @@ export function RoutineListRow<TRoutine extends RoutineListRowItem>({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onToggleEnabled(routine, enabled)}
-              disabled={isStatusPending || isArchived || disableToggle}
+              disabled={isStatusPending || isArchived || disableToggle || external}
             >
               {enabled ? "Pause" : "Enable"}
             </DropdownMenuItem>

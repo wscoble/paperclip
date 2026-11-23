@@ -40,6 +40,7 @@ import { getRecentProjectIds, trackRecentProject } from "../lib/recent-projects"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RoutineOverview } from "../components/RoutineOverview";
+import { isExternalRoutineItem, routineSourceLabel } from "../lib/routineSource";
 import { RoutineSectionHeading } from "../components/RoutineSectionHeading";
 import { RoutineSectionPicker, RoutineSubSidebar } from "../components/RoutineSubSidebar";
 import {
@@ -702,6 +703,16 @@ export function RoutineDetail() {
     );
   }
 
+  // External (observed) routines have no Paperclip triggers, variables,
+  // secrets or delivery configuration, and are never dispatched here.
+  const externalRoutine = isExternalRoutineItem(routine);
+  const externalHiddenSections: RoutineSectionKey[] = externalRoutine
+    ? ["triggers", "variables", "secrets", "delivery"]
+    : [];
+  if (externalRoutine && externalHiddenSections.includes(section)) {
+    return <Navigate to={routineDetailHref(routine.id, "overview")} replace />;
+  }
+
   const automationEnabled = routine.status === "active";
   const automationToggleDisabled = updateRoutineStatus.isPending || routine.status === "archived";
   const automationLabel =
@@ -811,6 +822,7 @@ export function RoutineDetail() {
             isSectionDirty={isSectionDirty}
             hasLiveRun={hasLiveRun}
             onNavigate={navigateToSection}
+            hiddenSections={externalHiddenSections}
           />
         ) : null}
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -819,6 +831,7 @@ export function RoutineDetail() {
             activeSection={section}
             onNavigate={navigateToSection}
             isSectionDirty={isSectionDirty}
+            hiddenSections={externalHiddenSections}
           />
         ) : null}
         <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-3 border-b border-border bg-background px-4 py-2 md:px-6">
@@ -852,6 +865,15 @@ export function RoutineDetail() {
                 <span className="font-mono text-(length:--text-nano)">{routine.managedByPlugin.resourceKey}</span>
               </Badge>
             ) : null}
+            {externalRoutine ? (
+              <Badge
+                variant="outline"
+                className="shrink-0 gap-1.5 text-xs text-muted-foreground"
+                title="Observed from an external scheduler; Paperclip does not dispatch it."
+              >
+                {routineSourceLabel(routine)}
+              </Badge>
+            ) : null}
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {section === "history" ? (
@@ -872,7 +894,7 @@ export function RoutineDetail() {
                 History
               </Button>
             )}
-            {section === "overview" ? (
+            {section === "overview" && externalRoutine ? null : section === "overview" ? (
               overviewEditing ? (
                 <Button
                   variant="outline"
@@ -892,17 +914,25 @@ export function RoutineDetail() {
                 </Button>
               )
             ) : null}
-            <RunButton onClick={() => setRunVariablesOpen(true)} disabled={runRoutine.isPending} />
-            <div className="flex items-center gap-2">
-              <ToggleSwitch
-                size="default"
-                checked={automationEnabled}
-                onCheckedChange={contextValue.onToggleAutomation}
-                disabled={automationToggleDisabled}
-                aria-label={automationEnabled ? "Pause automatic triggers" : "Enable automatic triggers"}
-              />
-              <span className={`text-sm font-medium ${automationLabelClassName}`}>{automationLabel}</span>
-            </div>
+            {externalRoutine ? (
+              <span className="text-sm font-medium text-muted-foreground" title="Scheduled outside Paperclip; observations are recorded per run.">
+                Observed
+              </span>
+            ) : (
+              <>
+                <RunButton onClick={() => setRunVariablesOpen(true)} disabled={runRoutine.isPending} />
+                <div className="flex items-center gap-2">
+                  <ToggleSwitch
+                    size="default"
+                    checked={automationEnabled}
+                    onCheckedChange={contextValue.onToggleAutomation}
+                    disabled={automationToggleDisabled}
+                    aria-label={automationEnabled ? "Pause automatic triggers" : "Enable automatic triggers"}
+                  />
+                  <span className={`text-sm font-medium ${automationLabelClassName}`}>{automationLabel}</span>
+                </div>
+              </>
+            )}
           </div>
         </header>
 

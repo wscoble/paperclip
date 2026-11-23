@@ -21,6 +21,7 @@ import { createIssueDetailLocationState } from "../lib/issueDetailBreadcrumb";
 import { collectLiveIssueIds } from "../lib/liveIssueIds";
 import { getRecentAssigneeIds, sortAgentsByRecency, trackRecentAssignee } from "../lib/recent-assignees";
 import { getRecentProjectIds, trackRecentProject } from "../lib/recent-projects";
+import { routineSourceOf, routineSourceLabel, ROUTINE_SOURCE_FILTERS, ROUTINE_SOURCE_LABELS, type RoutineSource } from "../lib/routineSource";
 import { usePublishSharedQueryData, useSharedPollingQuery } from "../hooks/useSharedPolling";
 import { EmptyState } from "../components/EmptyState";
 import { IssuesList } from "../components/IssuesList";
@@ -95,6 +96,7 @@ type RoutineViewState = {
   sortDir: RoutineSortDir;
   groupBy: RoutineGroupBy;
   collapsedGroups: string[];
+  sourceFilter?: RoutineSource | "all";
 };
 
 type RoutineGroup = {
@@ -110,6 +112,7 @@ const defaultRoutineViewState: RoutineViewState = {
   sortDir: "asc",
   groupBy: "folder",
   collapsedGroups: [],
+  sourceFilter: "all",
 };
 
 function getRoutineViewState(key: string): RoutineViewState {
@@ -692,9 +695,14 @@ export function Routines() {
       })),
     };
   }, [routineFolders, visibleRoutines]);
+  const sourceFilteredRoutines = useMemo(() => {
+    const source = routineViewState.sourceFilter;
+    if (!source || source === "all") return folderFilteredRoutines;
+    return folderFilteredRoutines.filter((routine) => routineSourceOf(routine) === source);
+  }, [folderFilteredRoutines, routineViewState.sourceFilter]);
   const sortedRoutines = useMemo(
-    () => sortRoutines(folderFilteredRoutines, routineViewState.sortField, routineViewState.sortDir),
-    [folderFilteredRoutines, routineViewState.sortDir, routineViewState.sortField],
+    () => sortRoutines(sourceFilteredRoutines, routineViewState.sortField, routineViewState.sortDir),
+    [routineViewState.sortDir, routineViewState.sortField, sourceFilteredRoutines],
   );
   const routineSections = useMemo(
     () => buildRoutineSections(sortedRoutines, routineViewState.groupBy, projectById, agentById, folderById),
@@ -1263,6 +1271,42 @@ export function Routines() {
           <div className="min-w-0 flex-1">
           {routineViewState.groupBy === "folder" && hasRoutineFolders ? (
             <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" title="Source">
+                    Source{routineViewState.sourceFilter && routineViewState.sourceFilter !== "all" ? `: ${routineSourceLabel({ originKind: `external:${routineViewState.sourceFilter}` })}` : ""}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-44 p-0">
+                  <div className="p-2 space-y-0.5">
+                    <button
+                      type="button"
+                      className={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm ${
+                        !routineViewState.sourceFilter || routineViewState.sourceFilter === "all"
+                          ? "bg-accent/50 text-foreground"
+                          : "text-muted-foreground hover:bg-accent/50"
+                      }`}
+                      onClick={() => updateRoutineView({ sourceFilter: "all" })}
+                    >
+                      <span>All sources</span>
+                    </button>
+                    {ROUTINE_SOURCE_FILTERS.map((source) => (
+                      <button
+                        type="button"
+                        key={source}
+                        className={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm ${
+                          routineViewState.sourceFilter === source
+                            ? "bg-accent/50 text-foreground"
+                            : "text-muted-foreground hover:bg-accent/50"
+                        }`}
+                        onClick={() => updateRoutineView({ sourceFilter: source })}
+                      >
+                        <span>{ROUTINE_SOURCE_LABELS[source]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
               {folderSelection === "all" ? <FolderIconHeader label="All routines" count={sortedRoutines.length} /> : (
                 <div className="flex min-w-0 items-center gap-2 text-sm">
                   <FolderSwatch color={activeFolder?.color} />
